@@ -1,6 +1,5 @@
 # 🗳️ ElectionChain Solana
 
-![banner](./images/banner-electionchain.jpg)
 
 Sistema de auditoría electoral desarrollado como **Solana Program** utilizando **Rust** y el framework **Anchor**.  
 
