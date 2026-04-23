@@ -1,60 +1,207 @@
-# Biblioteca en Solana
+# 🗳️ ElectionChain Solana
 
-![banner](./images/banner-biblioteca.jpg)
+![banner](./images/banner-electionchain.jpg)
 
-CRUD básico de un Solana Program desarrollado con Rust y Anchor desde el Solana Playground. 
+Sistema de auditoría electoral desarrollado como **Solana Program** utilizando **Rust** y el framework **Anchor**.  
 
-Puedes comenzar dándole Fork a este repositorio (abajo te explicamos como 👇), **hemos preparado un entorno de codespaces listo para que no tengas que instalar nada**, solo déjate llevar por la fluidez de los ejercicios y temas desarrollados especialmente para ti. 
+Este proyecto implementa un sistema **CRUD** para registrar, auditar y gestionar resultados electorales por casilla directamente en blockchain, garantizando:
 
-Asegúrate de clonar este repositorio a tu cuenta usando el botón **`Fork`**.
+- 🔑 Integridad mediante Program Derived Addresses (PDAs)  
+- 🔒 Seguridad basada en firmas autorizadas  
+- ⚡ Transparencia y trazabilidad *On-Chain*  
 
-![fork](./images/fork.png)
+---
 
-## Importando el proyecto 
+## 📚 Descripción
 
-Ya con el repositorio en tu cuenta lo siguiente que debes hacer copiar el `enlace de tu repositorio`, lo que se puede hacer directamente desdel navegador:
+**ElectionChain Solana** simula un sistema descentralizado de auditoría electoral donde una autoridad puede:
 
-![repo](./images/repo.png)
-Posteriormente, lo uniremos con el siguiente enlace en nuestro navegador de preferencia:
+- Inicializar una elección  
+- Registrar resultados de casillas  
+- Editar resultados (solo en recuentos oficiales)  
+- Eliminar casillas anuladas  
+- Consultar el cómputo total en blockchain  
 
-```url
-https://beta.solpg.io/
+---
+
+## 🧠 Arquitectura y Estructuras de Datos
+
+En Solana es obligatorio definir el tamaño de los datos para calcular la renta (*rent*).
+
+### 📦 PDA Principal: `AuditoriaEleccion`
+
+Cuenta raíz que almacena toda la información de la elección.
+
+```rust
+#[account]
+#[derive(InitSpace)]
+pub struct AuditoriaEleccion {
+    pub owner: Pubkey,
+    #[max_len(40)]
+    pub nombre_eleccion: String,
+    #[max_len(20)]
+    pub casillas: Vec<CasillaElectoral>,
+}
 ```
 
-Lo que nos dará algo parecido a:
+---
 
-![url](./images/url.png)
+### 🧩 Estructura Interna: `CasillaElectoral`
 
-Al pulsar enter seremos enviados al `Solana Playground` con nuestro proyecto abierto:
+Cada casilla contiene:
 
-![pg](./images/pg.png)
+- `id_casilla (String)` → identificador único (máx. 20 caracteres)  
+- `votos_candidato_a (u32)` → votos del candidato A  
+- `votos_candidato_b (u32)` → votos del candidato B  
 
-Para guardarlo solo damos clic en el boton `import` y asignamos un nombre:
+```rust
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace, PartialEq, Debug)]
+pub struct CasillaElectoral {
+    #[max_len(20)]
+    pub id_casilla: String,
+    pub votos_candidato_a: u32,
+    pub votos_candidato_b: u32,
+}
+```
 
-![import](./images/import.png)
+---
 
-## Preparacion del entorno
+## 🔒 Seguridad
 
-Primero conectaremos el entorno con la devnet, lo que tambien procederá a la creación de una wallet. Para eso daremos clic en donde dice **Not Conected**:
+El contrato valida que solo una entidad autorizada pueda modificar los datos:
 
-![playground1](./images/playground1.png)
+```rust
+require!(
+    eleccion.owner == ctx.accounts.owner.key(),
+    Errores::NoEresElAutorizado
+);
+```
 
-Saldrá la siguiente ventana donde daremos en el botón **Continue**:
+✔ Previene manipulación de resultados  
+✔ Garantiza control por autoridad electoral  
 
-![wallet](./images/wallet.png)
+---
 
-Como resultado se mostrará la siguiente información:
+## ⚙️ Funcionalidad (CRUD)
 
-![status](./images/status.png)
+### 🟢 Inicializar Elección
 
-* En verde: el estado de la conexión y el entorno al que se encuentra conectado
+Crea la cuenta principal usando:
 
-* En amarillo: la la dirección de la wallet conectada
+```rust
+[b"eleccion", owner.key().as_ref()]
+```
 
-* En azul: la cantidad de tokens en la wallet
+Inicializa:
+- Owner  
+- Nombre de la elección  
+- Lista vacía de casillas  
 
-> ℹ️ ¿Quieres ver el ejemplo de un "Hola Mundo" en Solana?. Da clic aquí: 👉 [Ver Ejemplo](https://github.com/WayLearnLatam/Solana-starter-kit/tree/1fc6349ba63375a3fe223d8d56911bc64765459b/build-deploy)
+---
 
-> ℹ️ ¿Cuentas con una Wallet de [Phantom](https://phantom.com/) que deseas importar?, Da clic aquí para ver como hacerlo: 
+### ➕ Registrar Casilla
 
-👉 [Como Importar una Wallet](https://github.com/WayLearnLatam/Solana-starter-kit/tree/1fc6349ba63375a3fe223d8d56911bc64765459b/import-key-a-playground)
+- Recibe:
+  - ID de casilla  
+  - votos candidato A  
+  - votos candidato B  
+- Inserta en el vector con `.push()`  
+- No realiza cálculos automáticos (datos directos del acta)  
+
+---
+
+### ✏️ Editar Casilla
+
+- Busca por `id_casilla`  
+- Actualiza votos únicamente en caso de recuento oficial  
+
+---
+
+### ❌ Eliminar Casilla
+
+```rust
+.iter().position(|c| c.id_casilla == id_casilla)
+```
+
+- Si existe → `.remove(index)`  
+- Si no → error `CasillaNoEncontrada`  
+
+---
+
+### 📖 Ver Resultados
+
+```rust
+msg!("Cómputo Transparente: {:#?}", eleccion.casillas);
+```
+
+Muestra el estado actual del conteo en logs *On-Chain*
+
+---
+
+## 🧪 Despliegue en Solana Playground
+
+1. Copia el código en `lib.rs`  
+2. Ejecuta:
+
+```bash
+cargo clean
+```
+
+3. Haz clic en **Build**  
+4. Haz clic en **Deploy (Devnet)**  
+
+---
+
+## 🧑‍💻 Pruebas
+
+Puedes interactuar con el contrato usando:
+
+- Pestaña **Test** del Playground  
+- Scripts en TypeScript:
+
+```ts
+pg.program.methods...
+```
+
+Parámetros:
+- `id_casilla: String`  
+- `votos_a: u32`  
+- `votos_b: u32`  
+
+---
+
+## ⚠️ Manejo de Errores
+
+El programa define errores personalizados:
+
+```rust
+#[error_code]
+pub enum Errores {
+    #[msg("Violación de seguridad: Llave no autorizada por el tribunal electoral.")]
+    NoEresElAutorizado,
+    #[msg("Error de auditoría: El ID de la casilla no existe en el cómputo.")]
+    CasillaNoEncontrada,
+}
+```
+
+---
+
+## 📌 Conclusión
+
+Este proyecto demuestra:
+
+- Transparencia en sistemas electorales usando blockchain  
+- Integridad de datos mediante control de acceso  
+- Uso eficiente de estructuras dinámicas en Solana  
+- Implementación de auditoría descentralizada  
+
+---
+
+## 🚀 Próximos pasos
+
+- Integrar frontend para visualización de resultados  
+- Añadir múltiples candidatos  
+- Implementar firmas múltiples (multi-sig)  
+- Crear dashboards de análisis electoral  
+
+---
